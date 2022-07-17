@@ -1,0 +1,198 @@
+<html>
+<head>
+    <title>GoogleMap cubic-bezier multi point</title>
+    <style>
+        /* Always set the map height explicitly to define the size of the div
+       * element that contains the map. */
+        #map {
+            height: 1000px;
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+<div id="map" class="row align-items-center mt-5"></div>
+</body>
+
+<script src="plugin/jquery/jquery.js"></script>
+<script src="https://maps.googleapis.com/maps/api/js?key={Google API KEY}&libraries=geometry"></script>
+
+<script>
+    $(function () {
+        init();
+    });
+
+    function init() {
+        initMap();
+        setPoint();
+    }
+
+    function setPoint() {
+        let point_member = new google.maps.LatLng(25.065216, 121.492088);
+        let point_car = new google.maps.LatLng(25.029422, 121.513165);
+        let point_end = new google.maps.LatLng(25.062392, 121.575821);
+
+        setMarker(point_member, point_car, point_end);
+        setBound(point_member, point_car, point_end);
+        setLine(point_member, point_car, point_end);
+
+    }
+
+    function setMarker(point_member, point_car, point_end) {
+        markers = [];
+        const marker_member = new google.maps.Marker({
+            position: point_member,
+        });
+        markers.push(marker_member);
+
+        const marker_car = new google.maps.Marker({
+            position: point_car,
+        });
+        markers.push(marker_car);
+
+        const marker_end = new google.maps.Marker({
+            position: point_end,
+        });
+        markers.push(marker_end);
+
+        for (var i = 0; i < markers.length; i++) {
+            markers[i].setMap(map);
+        }
+        google.maps.event.trigger(map, 'resize');
+    }
+
+    function setBound(point_member, point_car, point_end) {
+        var bounds = new google.maps.LatLngBounds();
+        bounds.extend(point_car);
+
+        if (point_member !== null) {
+            bounds.extend(point_member);
+        }
+        if (point_end !== null) {
+            bounds.extend(point_end);
+        }
+
+        map.fitBounds(bounds);
+        let zoom = map.getZoom();
+        map.setZoom(zoom > 17 ? 17 : zoom);
+    }
+
+    function setLine(point_member, point_car, point_end) {
+        lines = [];
+        let line = drawCurve(point_member, point_car, map);
+        lines.push(line);
+        let line3 = drawCurve(point_car, point_end, map);
+        lines.push(line3);
+
+    }
+
+    function initMap() {
+        map = new google.maps.Map(document.getElementById("map"), {
+            streetViewControl: false,
+            fullscreenControl: false,
+            zoomControl: false,
+            mapTypeControl: false,
+            rotateControl: false,
+            zoom: 13,
+            center: { lat: 25.0428524, lng: 121.524891 },
+        });
+    }
+
+    function drawCurve(P1, P2, map) {
+        let lineLength = google.maps.geometry.spherical.computeDistanceBetween(P1, P2);
+        let lineHeading = google.maps.geometry.spherical.computeHeading(P1, P2);
+        let lineHeading1, lineHeading2;
+
+        if (lineHeading < 0) {
+            lineHeading1 = lineHeading + 35;
+            lineHeading2 = lineHeading + 155;
+        } else {
+            lineHeading1 = lineHeading + -35;
+            lineHeading2 = lineHeading + -155;
+        }
+        let pA = google.maps.geometry.spherical.computeOffset(P1, lineLength / 2.2, lineHeading1);
+        let pB = google.maps.geometry.spherical.computeOffset(P2, lineLength / 2.2, lineHeading2);
+
+        return new GmapsCubicBezier(P1, pA, pB, P2, 0.01, map);
+    }
+
+    var GmapsCubicBezier = function(latlong1, latlong2, latlong3, latlong4, resolution, map) {
+        let lat1 = latlong1.lat();
+        let long1 = latlong1.lng();
+        let lat2 = latlong2.lat();
+        let long2 = latlong2.lng();
+        let lat3 = latlong3.lat();
+        let long3 = latlong3.lng();
+        let lat4 = latlong4.lat();
+        let long4 = latlong4.lng();
+
+        var points = [];
+
+        for (var i = 0; i <= 1; i +=resolution) {
+            points.push(this.getBezier({
+                x: lat1,
+                y: long1
+            }, {
+                x: lat2,
+                y: long2
+            }, {
+                x: lat3,
+                y: long3
+            }, {
+                x: lat4,
+                y: long4
+            }, i));
+        }
+        var path = [];
+        for (var i = 0; i < points.length - 1; i++) {
+            path.push(new google.maps.LatLng(points[i].x, points[i].y));
+            path.push(new google.maps.LatLng(points[i + 1].x, points[i + 1].y, false));
+        }
+
+        const lineSymbol = {
+            path: "M 0,-1 0,1",
+            strokeOpacity: 1,
+            scale: 3,
+        };
+        var Line = new google.maps.Polyline({
+            path: path,
+            geodesic: false,
+            strokeColor:"#003333",
+            strokeOpacity:0,
+            strokeWeight:3,
+            icons: [
+                {
+                    icon: lineSymbol,
+                    offset: "5",
+                    repeat: "15px",
+                },
+            ],
+        });
+
+        Line.setMap(map);
+
+        return Line;
+    };
+    GmapsCubicBezier.prototype = {
+        B1: function (t) {
+            return t * t * t;
+        },
+        B2: function (t) {
+            return 3 * t * t * (1 - t);
+        },
+        B3: function (t) {
+            return 3 * t * (1 - t) * (1 - t);
+        },
+        B4: function (t) {
+            return (1 - t) * (1 - t) * (1 - t);
+        },
+        getBezier: function (C1, C2, C3, C4, percent) {
+            var pos = {};
+            pos.x = C1.x * this.B1(percent) + C2.x * this.B2(percent) + C3.x * this.B3(percent) + C4.x * this.B4(percent);
+            pos.y = C1.y * this.B1(percent) + C2.y * this.B2(percent) + C3.y * this.B3(percent) + C4.y * this.B4(percent);
+            return pos;
+        }
+    }
+</script>
+</html>
